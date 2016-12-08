@@ -1,0 +1,190 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="../../bower_components/paper-dialog/paper-dialog.html">
+<link rel="import" href="../../bower_components/paper-dialog-scrollable/paper-dialog-scrollable.html">
+<!-- <link rel="import" href="../../bower_components/neon-animation/animations/slide-up-animation.html">
+<link rel="import" href="../../bower_components/neon-animation/animations/slide-down-animation.html">
+ -->
+<link rel="import" href="../state-summary/state-card-content.html">
+<link rel="import" href="../components/state-history-charts.html">
+<link rel="import" href="../more-infos/more-info-content.html">
+
+<link rel='import' href='../util/hass-behavior.html'>
+
+<dom-module id="more-info-dialog">
+  <template>
+    <style>
+      paper-dialog {
+        font-size: 14px;
+      }
+
+      state-history-charts {
+        position: relative;
+        z-index: 1;
+      }
+
+      state-card-content {
+        margin-bottom: 24px;
+        font-size: 14px;
+      }
+
+      @media all and (max-width: 450px), all and (max-height: 500px) {
+        paper-dialog {
+          margin: 0;
+          width: 100%;
+          max-height: calc(100% - 64px);
+
+          position: fixed !important;
+          bottom: 0px;
+          left: 0px;
+          right: 0px;
+          overflow: scroll;
+        }
+      }
+    </style>
+
+    <!-- entry-animation='slide-up-animation' exit-animation='slide-down-animation' -->
+    <paper-dialog id="dialog" with-backdrop opened='{{dialogOpen}}'>
+      <h2>
+        <state-card-content
+          state-obj="[[stateObj]]"
+          hass='[[hass]]' in-dialog></state-card-content>
+      </h2>
+      <template is='dom-if' if="[[showHistoryComponent]]">
+        <state-history-charts state-history="[[stateHistory]]"
+          is-loading-data="[[isLoadingHistoryData]]"></state-history-charts>
+      </template>
+      <paper-dialog-scrollable id='scrollable'>
+        <more-info-content
+          state-obj="[[stateObj]]" hass='[[hass]]'></more-info-content>
+      </paper-dialog-scrollable>
+    </paper-dialog>
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'more-info-dialog',
+
+  behaviors: [window.hassBehavior],
+
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    stateObj: {
+      type: Object,
+      bindNuclear: function (hass) {
+        return hass.moreInfoGetters.currentEntity;
+      },
+      observer: 'stateObjChanged',
+    },
+
+    stateHistory: {
+      type: Object,
+      bindNuclear: function (hass) {
+        return [
+          hass.moreInfoGetters.currentEntityHistory,
+          function (history) { return history ? [history] : false; },
+        ];
+      },
+    },
+
+    isLoadingHistoryData: {
+      type: Boolean,
+      computed: 'computeIsLoadingHistoryData(delayedDialogOpen, isLoadingEntityHistoryData)',
+    },
+
+    isLoadingEntityHistoryData: {
+      type: Boolean,
+      bindNuclear: function (hass) {
+        return hass.entityHistoryGetters.isLoadingEntityHistory;
+      },
+    },
+
+    hasHistoryComponent: {
+      type: Boolean,
+      bindNuclear: function (hass) {
+        return hass.configGetters.isComponentLoaded('history');
+      },
+      observer: 'fetchHistoryData',
+    },
+
+    shouldFetchHistory: {
+      type: Boolean,
+      bindNuclear: function (hass) {
+        return hass.moreInfoGetters.isCurrentEntityHistoryStale;
+      },
+      observer: 'fetchHistoryData',
+    },
+
+    showHistoryComponent: {
+      type: Boolean,
+      value: false,
+      computed: 'computeShowHistoryComponent(hasHistoryComponent, stateObj)',
+    },
+
+    dialogOpen: {
+      type: Boolean,
+      value: false,
+      observer: 'dialogOpenChanged',
+    },
+
+    delayedDialogOpen: {
+      type: Boolean,
+      value: false,
+    },
+  },
+
+  ready: function () {
+    this.$.scrollable.dialogElement = this.$.dialog;
+  },
+
+  /**
+   * We depend on a delayed dialogOpen value to tell the chart component
+   * that the data is there. Otherwise the chart component will render
+   * before the dialog is attached to the screen and is unable to determine
+   * graph size resulting in scroll bars.
+   */
+  computeIsLoadingHistoryData: function (delayedDialogOpen, isLoadingEntityHistoryData) {
+    return !delayedDialogOpen || isLoadingEntityHistoryData;
+  },
+
+  computeShowHistoryComponent: function (hasHistoryComponent, stateObj) {
+    return this.hasHistoryComponent && stateObj &&
+      window.hassUtil.DOMAINS_WITH_NO_HISTORY.indexOf(stateObj.domain) === -1;
+  },
+
+  fetchHistoryData: function () {
+    if (this.stateObj && this.hasHistoryComponent &&
+        this.shouldFetchHistory) {
+      this.hass.entityHistoryActions.fetchRecent(this.stateObj.entityId);
+    }
+  },
+
+  stateObjChanged: function (newVal) {
+    if (!newVal) {
+      this.dialogOpen = false;
+      return;
+    }
+
+    this.async(function () {
+      // Firing action while other action is happening confuses nuclear
+      this.fetchHistoryData();
+      // allow dialog to render content before showing it so it is
+      // positioned correctly.
+      this.dialogOpen = true;
+    }.bind(this), 10);
+  },
+
+  dialogOpenChanged: function (newVal) {
+    if (newVal) {
+      this.async(function () { this.delayedDialogOpen = true; }.bind(this), 10);
+    } else if (!newVal && this.stateObj) {
+      this.async(function () { this.hass.moreInfoActions.deselectEntity(); }.bind(this), 10);
+      this.delayedDialogOpen = false;
+    }
+  },
+});
+</script>
