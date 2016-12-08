@@ -1,0 +1,156 @@
+<link rel='import' href='../../bower_components/polymer/polymer.html'>
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+
+<link rel='import' href='../components/ha-card.html'>
+<link rel='import' href='../components/entity/ha-entity-toggle.html'>
+<link rel='import' href='../state-summary/state-card-content.html'>
+
+<dom-module id='ha-entities-card'>
+  <template>
+    <style is="custom-style" include="iron-flex iron-flex-factors"></style>
+    <style>
+      .states {
+        padding-bottom: 16px;
+      }
+      .state {
+        padding: 4px 16px;
+        cursor: pointer;
+      }
+      .header {
+        @apply(--paper-font-headline);
+        /* overwriting line-height +8 because entity-toggle can be 40px height,
+           compensating this with reduced padding */
+        line-height: 40px;
+        color: black;
+        padding: 20px 16px 12px;
+        text-transform: capitalize;
+      }
+      .header .name {
+        @apply(--paper-font-common-nowrap);
+      }
+      ha-entity-toggle {
+        margin-left: 16px;
+      }
+      .header-more-info {
+        cursor: pointer;
+      }
+      .column {
+        @apply(--layout-horizontal);
+        @apply(--layout-wrap);
+		@apply(--layout-center-justified);
+        width: auto;
+      }
+      .gridster .gs-w {
+        z-index: 0;
+      }
+	  .zone-card {
+        margin-left: 8px;
+        margin-bottom: 8px;
+      }
+      @media (max-width: 399px) {
+        .column {
+        max-width: 350px;
+        @apply(--layout-wrap);
+        @apply(--layout-center-justified);
+        }
+      .zone-card {
+        margin-left: 8px;
+        margin-bottom: 8px;
+      }
+	  }
+
+    </style>
+
+      <div class='column'>
+        <template is='dom-repeat' items="[[states]]" >
+          <div class='zone-card '> 
+            <ha-card>
+              <div class='states '>
+		        <div class$='[[computeTitleClass(groupEntity)]]' on-tap='entityTapped'>
+                  <div class='flex name'>[[computeTitle(states, groupEntity)]]</div>
+                  <template is='dom-if' if='[[showGroupToggle(groupEntity, states)]]'>
+                  <ha-entity-toggle
+                    hass='[[hass]]'
+                    state-obj='[[groupEntity]]'></ha-entity-toggle>
+                  </template>
+                </div>
+                <div class='state' on-tap='entityTapped'>
+                  <state-card-content
+                    hass='[[hass]]'
+                    class="state-card"
+                    state-obj="[[item]]"></state-card-content>
+                </div>
+              </div>
+            </ha-card>
+          </div>
+        </template>
+      </div>
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'ha-entities-card',
+
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    states: {
+      type: Array,
+    },
+    groupEntity: {
+      type: Object,
+    },
+  },
+
+  computeTitle: function (states, groupEntity) {
+    return groupEntity ? groupEntity.entityDisplay :
+                         states[0].domain.replace(/_/g, ' ');
+  },
+
+  computeTitleClass: function (groupEntity) {
+    var classes = 'header horizontal layout center ';
+    if (groupEntity) {
+      classes += 'header-more-info';
+    }
+    return classes;
+  },
+
+  entityTapped: function (ev) {
+    var entityId;
+    if (ev.target.classList.contains('paper-toggle-button') ||
+        ev.target.classList.contains('paper-icon-button') ||
+        (!ev.model && !this.groupEntity)) {
+      return;
+    }
+    ev.stopPropagation();
+
+    if (ev.model) {
+      entityId = ev.model.item.entityId;
+    } else {
+      entityId = this.groupEntity.entityId;
+    }
+    this.async(function () { this.hass.moreInfoActions.selectEntity(entityId); }.bind(this), 1);
+  },
+
+  showGroupToggle: function (groupEntity, states) {
+    var canToggleCount;
+
+    if (!groupEntity || !states ||
+        (groupEntity.state !== 'on' && groupEntity.state !== 'off')) {
+      return false;
+    }
+
+    // only show if we can toggle 2+ entities in group
+    canToggleCount = states.reduce(
+      function (sum, state) {
+        return sum + window.hassUtil.canToggle(this.hass, state.entityId);
+      }, 0);
+
+    return canToggleCount > 1;
+  },
+});
+</script>
