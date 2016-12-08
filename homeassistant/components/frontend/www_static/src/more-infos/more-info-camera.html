@@ -1,0 +1,49 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<dom-module id='more-info-camera'>
+  <template>
+    <style>
+      :host {
+        max-width:640px;
+      }
+
+      .camera-image {
+        width: 100%;
+      }
+    </style>
+
+    <img class='camera-image' src="[[computeCameraImageUrl(hass, stateObj)]]"
+         on-load='imageLoaded' alt='[[stateObj.entityDisplay]]' />
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'more-info-camera',
+
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    stateObj: {
+      type: Object,
+    },
+  },
+
+  imageLoaded: function () {
+    this.fire('iron-resize');
+  },
+
+  computeCameraImageUrl: function (hass, stateObj) {
+    if (hass.demo) {
+      return '/demo/webcam.jpg';
+    } else if (stateObj) {
+      return '/api/camera_proxy_stream/' + stateObj.entityId +
+             '?token=' + stateObj.attributes.access_token;
+    }
+    // Return an empty image if no stateObj (= dialog not open)
+    return 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+  },
+});
+</script>

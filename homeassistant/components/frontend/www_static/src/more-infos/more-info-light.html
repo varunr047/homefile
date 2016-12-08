@@ -1,0 +1,184 @@
+<link rel='import' href='../../bower_components/polymer/polymer.html'>
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+
+<link rel='import' href='../components/ha-labeled-slider.html'>
+<link rel='import' href='../components/ha-color-picker.html'>
+
+<dom-module id='more-info-light'>
+  <template>
+    <style is="custom-style" include="iron-flex"></style>
+    <style>
+      .brightness, .color_temp, .white_value {
+        max-height: 0px;
+        overflow: hidden;
+        transition: max-height .5s ease-in;
+      }
+
+      ha-color-picker {
+        display: block;
+        width: 250px;
+
+        max-height: 0px;
+        overflow: hidden;
+        transition: max-height .2s ease-in;
+      }
+
+      .has-brightness .brightness,
+      .has-color_temp .color_temp,
+      .has-white_value .white_value {
+        max-height: 84px;
+      }
+
+      .has-rgb_color ha-color-picker {
+        max-height: 200px;
+      }
+    </style>
+
+    <div class$='[[computeClassNames(stateObj)]]'>
+
+      <div class='brightness'>
+        <ha-labeled-slider
+          caption='Brightness' icon='mdi:brightness-5' max='255'
+          value='{{brightnessSliderValue}}'
+          on-change='brightnessSliderChanged'></ha-labeled-slider>
+      </div>
+
+      <div class='color_temp'>
+        <ha-labeled-slider
+          caption='Color Temperature' icon='mdi:thermometer'
+          min='154' max='500'
+          value='{{ctSliderValue}}'
+          on-change='ctSliderChanged'></ha-labeled-slider>
+      </div>
+
+      <div class='white_value'>
+        <ha-labeled-slider
+          caption='White Value' icon='mdi:file-word-box' max='255'
+          value='{{wvSliderValue}}'
+          on-change='wvSliderChanged'></ha-labeled-slider>
+      </div>
+
+      <ha-color-picker on-colorselected='colorPicked' height='200' width='250'>
+      </ha-color-picker>
+    </div>
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'more-info-light',
+
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    stateObj: {
+      type: Object,
+      observer: 'stateObjChanged',
+    },
+
+    brightnessSliderValue: {
+      type: Number,
+      value: 0,
+    },
+
+    ctSliderValue: {
+      type: Number,
+      value: 0,
+    },
+
+    wvSliderValue: {
+      type: Number,
+      value: 0,
+    },
+  },
+
+  stateObjChanged: function (newVal) {
+    if (newVal && newVal.state === 'on') {
+      this.brightnessSliderValue = newVal.attributes.brightness;
+      this.ctSliderValue = newVal.attributes.color_temp;
+      this.wvSliderValue = newVal.attributes.white_value;
+    }
+
+    this.async(function () {
+      this.fire('iron-resize');
+    }.bind(this), 500);
+  },
+
+  computeClassNames: function (stateObj) {
+    return window.hassUtil.attributeClassNames(
+      stateObj, ['brightness', 'rgb_color', 'color_temp', 'white_value']);
+  },
+
+  brightnessSliderChanged: function (ev) {
+    var bri = parseInt(ev.target.value, 10);
+
+    if (isNaN(bri)) return;
+
+    if (bri === 0) {
+      this.hass.serviceActions.callTurnOff(this.stateObj.entityId);
+    } else {
+      this.hass.serviceActions.callService('light', 'turn_on', {
+        entity_id: this.stateObj.entityId,
+        brightness: bri,
+      });
+    }
+  },
+
+  ctSliderChanged: function (ev) {
+    var ct = parseInt(ev.target.value, 10);
+
+    if (isNaN(ct)) return;
+
+    this.hass.serviceActions.callService('light', 'turn_on', {
+      entity_id: this.stateObj.entityId,
+      color_temp: ct,
+    });
+  },
+
+  wvSliderChanged: function (ev) {
+    var wv = parseInt(ev.target.value, 10);
+
+    if (isNaN(wv)) return;
+
+    this.hass.serviceActions.callService('light', 'turn_on', {
+      entity_id: this.stateObj.entityId,
+      white_value: wv,
+    });
+  },
+
+  serviceChangeColor: function (hass, entityId, color) {
+    hass.serviceActions.callService('light', 'turn_on', {
+      entity_id: entityId,
+      rgb_color: [color.r, color.g, color.b],
+    });
+  },
+
+  /**
+   * Called when a new color has been picked. We will not respond to every
+   * color pick event but have a pause between requests.
+   */
+  colorPicked: function (ev) {
+    if (this.skipColorPicked) {
+      this.colorChanged = true;
+      return;
+    }
+
+    this.color = ev.detail.rgb;
+
+    this.serviceChangeColor(this.hass, this.stateObj.entityId, this.color);
+
+    this.colorChanged = false;
+    this.skipColorPicked = true;
+
+    this.colorDebounce = setTimeout(function () {
+      if (this.colorChanged) {
+        this.serviceChangeColor(this.hass, this.stateObj.entityId, this.color);
+      }
+      this.skipColorPicked = false;
+    }.bind(this), 500);
+  },
+});
+</script>

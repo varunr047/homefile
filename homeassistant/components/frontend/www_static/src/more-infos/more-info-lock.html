@@ -1,0 +1,63 @@
+<link rel='import' href='../../bower_components/polymer/polymer.html'>
+
+<link rel='import' href='../../bower_components/paper-button/paper-button.html'>
+<link rel='import' href='../../bower_components/paper-input/paper-input.html'>
+
+<dom-module id='more-info-lock'>
+  <template>
+    <style>
+      paper-input {
+        display: inline-block;
+      }
+    </style>
+
+    <div hidden$='[[!stateObj.attributes.code_format]]'>
+      <paper-input label='code' value='{{enteredCode}}' pattern='[[stateObj.attributes.code_format]]' type='password'></paper-input>
+      <paper-button on-tap='handleUnlockTap' hidden$='[[!isLocked]]'>Unlock</paper-button>
+      <paper-button on-tap='handleLockTap' hidden$=[[isLocked]]>Lock</paper-button>
+    </div>
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'more-info-lock',
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    stateObj: {
+      type: Object,
+      observer: 'stateObjChanged',
+    },
+    enteredCode: {
+      type: String,
+      value: '',
+    },
+  },
+
+  handleUnlockTap: function () {
+    this.callService('unlock', { code: this.enteredCode });
+  },
+
+  handleLockTap: function () {
+    this.callService('lock', { code: this.enteredCode });
+  },
+
+  stateObjChanged: function (newVal) {
+    if (newVal) {
+      this.isLocked = newVal.state === 'locked';
+    }
+    this.async(function () {
+      this.fire('iron-resize');
+    }.bind(this), 500);
+  },
+
+  callService: function (service, data) {
+    var serviceData = data || {};
+    serviceData.entity_id = this.stateObj.entityId;
+    this.hass.serviceActions.callService('lock', service, serviceData);
+  },
+});
+</script>
