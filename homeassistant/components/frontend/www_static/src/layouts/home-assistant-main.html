@@ -1,0 +1,127 @@
+<link rel='import' href='../../bower_components/polymer/polymer.html'>
+<link rel='import' href='../../bower_components/paper-drawer-panel/paper-drawer-panel.html'>
+<link rel='import' href='../../bower_components/iron-media-query/iron-media-query.html'>
+<link rel='import' href='../../bower_components/iron-pages/iron-pages.html'>
+
+<link rel='import' href='../layouts/partial-cards.html'>
+<link rel='import' href='../layouts/partial-panel-resolver.html'>
+<link rel='import' href='../managers/notification-manager.html'>
+<link rel="import" href="../dialogs/more-info-dialog.html">
+<link rel="import" href="../dialogs/ha-voice-command-dialog.html">
+
+<link rel='import' href='../components/ha-sidebar.html'>
+
+<dom-module id='home-assistant-main'>
+  <template>
+    <notification-manager hass='[[hass]]'></notification-manager>
+    <more-info-dialog hass='[[hass]]'></more-info-dialog>
+    <ha-voice-command-dialog hass='[[hass]]'></ha-voice-command-dialog>
+    <iron-media-query query="(max-width: 870px)" query-matches="{{narrow}}">
+    </iron-media-query>
+
+    <paper-drawer-panel id='drawer'
+      force-narrow='[[computeForceNarrow(narrow, showSidebar)]]'
+      responsive-width='0' disable-swipe='[[isSelectedMap]]'
+      disable-edge-swipe='[[isSelectedMap]]'>
+      <ha-sidebar drawer narrow='[[narrow]]' hass='[[hass]]'></ha-sidebar>
+
+      <iron-pages
+        main
+        attr-for-selected='id'
+        fallback-selection='panel-resolver'
+        selected='[[activePanel]]'
+        selected-attribute='panel-visible'
+      >
+        <partial-cards
+          id='states'
+          narrow='[[narrow]]'
+          hass='[[hass]]'
+          show-menu='[[showSidebar]]'
+        ></partial-cards>
+
+        <partial-panel-resolver
+          id='panel-resolver'
+          narrow='[[narrow]]'
+          hass='[[hass]]'
+          show-menu='[[showSidebar]]'
+        ></partial-panel-resolver>
+
+      </iron-pages>
+    </paper-drawer-panel>
+
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'home-assistant-main',
+
+  behaviors: [window.hassBehavior],
+
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    narrow: {
+      type: Boolean,
+      value: true,
+    },
+
+    activePanel: {
+      type: String,
+      bindNuclear: function (hass) {
+        return hass.navigationGetters.activePanelName;
+      },
+      observer: 'activePanelChanged',
+    },
+
+    showSidebar: {
+      type: Boolean,
+      value: false,
+      bindNuclear: function (hass) {
+        return hass.navigationGetters.showSidebar;
+      },
+    },
+  },
+
+  listeners: {
+    'open-menu': 'openMenu',
+    'close-menu': 'closeMenu',
+  },
+
+  openMenu: function () {
+    if (this.narrow) {
+      this.$.drawer.openDrawer();
+    } else {
+      this.hass.navigationActions.showSidebar(true);
+    }
+  },
+
+  closeMenu: function () {
+    this.$.drawer.closeDrawer();
+    if (this.showSidebar) {
+      this.hass.navigationActions.showSidebar(false);
+    }
+  },
+
+  activePanelChanged: function () {
+    if (this.narrow) {
+      this.$.drawer.closeDrawer();
+    }
+  },
+
+  attached: function () {
+    window.removeInitMsg();
+    this.hass.startUrlSync();
+  },
+
+  computeForceNarrow: function (narrow, showSidebar) {
+    return narrow || !showSidebar;
+  },
+
+  detached: function () {
+    this.hass.stopUrlSync();
+  },
+});
+</script>

@@ -1,0 +1,312 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html">
+<link rel="import" href="../../bower_components/iron-pages/iron-pages.html">
+
+<link rel="import" href="../../bower_components/paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../../bower_components/paper-tabs/paper-tabs.html">
+<link rel="import" href="../../bower_components/paper-tabs/paper-tab.html">
+
+<link rel="import" href="../../bower_components/app-layout/app-header-layout/app-header-layout.html">
+<link rel="import" href="../../bower_components/app-layout/app-scroll-effects/effects/waterfall.html">
+<link rel="import" href="../../bower_components/app-layout/app-header/app-header.html">
+<link rel="import" href="../../bower_components/app-layout/app-toolbar/app-toolbar.html">
+
+<link rel="import" href="../components/ha-menu-button.html">
+<link rel="import" href="../components/ha-cards.html">
+<link rel="import" href="../util/hass-behavior.html">
+
+<dom-module id="partial-cards">
+  <template>
+    <style include="iron-flex iron-positioning ha-style">
+      :host {
+        -ms-user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+      }
+
+      app-header-layout {
+        background-color: #E5E5E5;
+      }
+
+      paper-tabs {
+        margin-left: 12px;
+        --paper-tabs-selection-bar-color: #FFF;
+        text-transform: uppercase;
+      }
+    </style>
+
+    <app-header-layout has-scrolling-region id='layout'>
+      <app-header effects="waterfall" condenses fixed>
+        <app-toolbar>
+          <ha-menu-button narrow='[[narrow]]' show-menu='[[showMenu]]'></ha-menu-button>
+          <div main-title>[[computeTitle(views, locationName)]]</div>
+          <paper-icon-button
+            icon="mdi:refresh"
+            class$="[[computeRefreshButtonClass(isFetching)]]"
+            on-tap="handleRefresh" hidden$="[[isStreaming]]"
+          ></paper-icon-button>
+          <paper-icon-button
+            icon="mdi:microphone" hidden$='[[!canListen]]'
+            on-tap="handleListenClick"></paper-icon-button>
+        </app-toolbar>
+
+        <div sticky hidden$='[[!views.length]]'>
+          <paper-tabs
+            scrollable
+            selected='[[currentView]]'
+            attr-for-selected='data-entity'
+            on-iron-select='handleViewSelected'
+          >
+            <paper-tab
+              data-entity=''
+              on-tap='scrollToTop'
+            >[[locationName]]</paper-tab>
+            <template is='dom-repeat' items='[[views]]'>
+              <paper-tab
+                data-entity$='[[item.entityId]]'
+                on-tap='scrollToTop'
+              >
+                <template is='dom-if' if='[[item.attributes.icon]]'>
+                  <iron-icon icon='[[item.attributes.icon]]'></iron-icon>
+                </template>
+                <template is='dom-if' if='[[!item.attributes.icon]]'>
+                  [[item.entityDisplay]]
+                </template>
+              </paper-tab>
+            </template>
+          </paper-tabs>
+        </div>
+      </app-header>
+
+      <iron-pages
+        attr-for-selected='data-view'
+        selected='[[currentView]]'
+        selected-attribute='view-visible'
+      >
+        <grid-layout></grid-layout>
+        <ha-cards
+          data-view=''
+          show-introduction='[[computeShowIntroduction(currentView, introductionLoaded, states)]]'
+          states='[[states]]'
+          columns='[[_columns]]'
+          hass='[[hass]]'
+          panel-visible='[[panelVisible]]'
+        ></ha-cards>
+
+        <template is='dom-repeat' items='[[views]]'>
+          <ha-cards
+            data-view$='[[item.entityId]]'
+            show-introduction='[[computeShowIntroduction(currentView, introductionLoaded, states)]]'
+            states='[[states]]'
+            columns='[[_columns]]'
+            hass='[[hass]]'
+            panel-visible='[[panelVisible]]'
+          ></ha-cards>
+        </template>
+
+      </iron-pages>
+    </app-header-layout>
+  </template>
+
+</dom-module>
+
+<script>
+Polymer({
+  is: 'partial-cards',
+
+  behaviors: [window.hassBehavior],
+
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    narrow: {
+      type: Boolean,
+      value: false,
+    },
+
+    showMenu: {
+      type: Boolean,
+      value: false,
+      observer: 'handleWindowChange',
+    },
+
+    panelVisible: {
+      type: Boolean,
+      value: false,
+    },
+
+    _columns: {
+      type: Number,
+      value: 1,
+    },
+
+    isFetching: {
+      type: Boolean,
+      bindNuclear: function (hass) {
+        return hass.syncGetters.isFetching;
+      },
+    },
+
+    isStreaming: {
+      type: Boolean,
+      bindNuclear: function (hass) {
+        return hass.streamGetters.isStreamingEvents;
+      },
+    },
+
+    canListen: {
+      type: Boolean,
+      bindNuclear: function (hass) {
+        return [
+          hass.voiceGetters.isVoiceSupported,
+          hass.configGetters.isComponentLoaded('conversation'),
+          function (isVoiceSupported, componentLoaded) {
+            return isVoiceSupported && componentLoaded;
+          },
+        ];
+      },
+    },
+
+    introductionLoaded: {
+      type: Boolean,
+      bindNuclear: function (hass) {
+        return hass.configGetters.isComponentLoaded('introduction');
+      },
+    },
+
+    locationName: {
+      type: String,
+      bindNuclear: function (hass) {
+        return hass.configGetters.locationName;
+      },
+    },
+
+    currentView: {
+      type: String,
+      bindNuclear: function (hass) {
+        return [
+          hass.viewGetters.currentView,
+          function (view) { return view || ''; },
+        ];
+      },
+    },
+
+    views: {
+      type: Array,
+      bindNuclear: function (hass) {
+        return [
+          hass.viewGetters.views,
+          function (views) {
+            return views.valueSeq()
+              .sortBy(function (view) { return view.attributes.order; })
+              .toArray();
+          },
+        ];
+      },
+    },
+
+    states: {
+      type: Object,
+      bindNuclear: function (hass) {
+        return hass.viewGetters.currentViewEntities;
+      },
+    },
+  },
+
+  created: function () {
+    this.handleWindowChange = this.handleWindowChange.bind(this);
+    this.mqls = [300, 600, 900, 1200].map(function (width) {
+      var mql = window.matchMedia('(min-width: ' + width + 'px)');
+      mql.addListener(this.handleWindowChange);
+      return mql;
+    }.bind(this));
+  },
+
+  detached: function () {
+    this.mqls.forEach(function (mql) {
+      mql.removeListener(this.handleWindowChange);
+    });
+  },
+
+  handleWindowChange: function () {
+    var matchColumns = this.mqls.reduce(function (cols, mql) {
+      return cols + mql.matches;
+    }, 0);
+    // Do -1 column if the menu is docked and open
+    this._columns = Math.max(1, matchColumns - (!this.narrow && this.showMenu));
+  },
+
+  /**
+   * Scroll to a specific y coordinate.
+   *
+   * Copied from paper-scroll-header-panel.
+   *
+   * @method scroll
+   * @param {number} top The coordinate to scroll to, along the y-axis.
+   * @param {boolean} smooth true if the scroll position should be smoothly adjusted.
+   */
+  scrollToTop: function () {
+    // the scroll event will trigger _updateScrollState directly,
+    // However, _updateScrollState relies on the previous `scrollTop` to update the states.
+    // Calling _updateScrollState will ensure that the states are synced correctly.
+    var top = 0;
+    var scroller = this.$.layout.header.scrollTarget;
+    var easingFn = function easeOutQuad(t, b, c, d) {
+      /* eslint-disable no-param-reassign, space-infix-ops, no-mixed-operators */
+      t /= d;
+      return -c * t*(t-2) + b;
+      /* eslint-enable no-param-reassign, space-infix-ops, no-mixed-operators */
+    };
+    var animationId = Math.random();
+    var duration = 200;
+    var startTime = Date.now();
+    var currentScrollTop = scroller.scrollTop;
+    var deltaScrollTop = top - currentScrollTop;
+    this._currentAnimationId = animationId;
+    (function updateFrame() {
+      var now = Date.now();
+      var elapsedTime = now - startTime;
+      if (elapsedTime > duration) {
+        scroller.scrollTop = top;
+      } else if (this._currentAnimationId === animationId) {
+        scroller.scrollTop = easingFn(elapsedTime, currentScrollTop, deltaScrollTop, duration);
+        requestAnimationFrame(updateFrame.bind(this));
+      }
+    }).call(this);
+  },
+
+  handleRefresh: function () {
+    this.hass.syncActions.fetchAll();
+  },
+
+  handleListenClick: function () {
+    this.hass.voiceActions.listen();
+  },
+
+  handleViewSelected: function (ev) {
+    var view = ev.detail.item.getAttribute('data-entity') || null;
+    var current = this.currentView || null;
+    if (view !== current) {
+      this.async(function () {
+        this.hass.viewActions.selectView(view);
+      }.bind(this), 0);
+    }
+  },
+
+  computeRefreshButtonClass: function (isFetching) {
+    return isFetching ? 'ha-spin' : '';
+  },
+
+  computeTitle: function (views, locationName) {
+    return views.length > 0 ? 'Home Assistant' : locationName;
+  },
+
+  computeShowIntroduction: function (currentView, introductionLoaded, states) {
+    return currentView === '' && (introductionLoaded || states.size === 0);
+  },
+});
+</script>

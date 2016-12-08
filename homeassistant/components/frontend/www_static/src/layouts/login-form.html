@@ -1,0 +1,163 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+
+<link rel="import" href="../../bower_components/paper-checkbox/paper-checkbox.html">
+<link rel="import" href="../../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../../bower_components/paper-input/paper-input-container.html">
+<link rel="import" href="../../bower_components/paper-input/paper-input-error.html">
+<link rel="import" href="../../bower_components/iron-input/iron-input.html">
+<link rel="import" href="../../bower_components/paper-spinner/paper-spinner.html">
+
+<link rel='import' href='../util/hass-behavior.html'>
+
+<dom-module id="login-form">
+  <template>
+    <style is="custom-style" include="iron-flex iron-positioning"></style>
+    <style>
+      :host {
+        white-space: nowrap;
+      }
+
+      #passwordDecorator {
+        display: block;
+        margin-bottom: 16px;
+      }
+
+      paper-checkbox {
+        margin-right: 8px;
+      }
+
+      paper-button {
+        margin-left: 72px;
+      }
+
+      .interact {
+        height: 125px;
+      }
+
+      #validatebox {
+        margin-top: 16px;
+        text-align: center;
+      }
+
+      .validatemessage {
+        margin-top: 10px;
+      }
+    </style>
+
+    <div class="layout vertical center center-center fit">
+      <img src="/static/icons/favicon-192x192.png" height="192" />
+      <a href="#" id="hideKeyboardOnFocus"></a>
+      <div class='interact'>
+        <div id='loginform' hidden$="[[showLoading]]">
+          <paper-input-container id="passwordDecorator" invalid="[[isInvalid]]">
+            <label>Password</label>
+            <input is="iron-input" type="password" id="passwordInput" />
+            <paper-input-error invalid="[[isInvalid]]">[[errorMessage]]</paper-input-error>
+          </paper-input-container>
+          <div class="layout horizontal center">
+            <paper-checkbox for id='rememberLogin'>Remember</paper-checkbox>
+            <paper-button id='loginButton'>Log In</paper-button>
+          </div>
+        </div>
+        <div id="validatebox" hidden$="[[!showLoading]]">
+          <paper-spinner active="true"></paper-spinner><br />
+          <div class="validatemessage">Loading data</div>
+        </div>
+      </div>
+    </div>
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'login-form',
+
+  behaviors: [window.hassBehavior],
+
+  properties: {
+    hass: {
+      type: Object,
+    },
+
+    errorMessage: {
+      type: String,
+      bindNuclear: function (hass) { return hass.authGetters.attemptErrorMessage; },
+    },
+
+    isInvalid: {
+      type: Boolean,
+      bindNuclear: function (hass) { return hass.authGetters.isInvalidAttempt; },
+    },
+
+    isValidating: {
+      type: Boolean,
+      observer: 'isValidatingChanged',
+      bindNuclear: function (hass) { return hass.authGetters.isValidating; },
+    },
+
+    loadingResources: {
+      type: Boolean,
+      value: false,
+    },
+
+    forceShowLoading: {
+      type: Boolean,
+      value: false,
+    },
+
+    showLoading: {
+      type: Boolean,
+      computed: 'computeShowSpinner(forceShowLoading, isValidating)',
+    },
+  },
+
+  listeners: {
+    keydown: 'passwordKeyDown',
+    'loginButton.tap': 'validatePassword',
+  },
+
+  observers: [
+    'validatingChanged(isValidating, isInvalid)',
+  ],
+
+  attached: function () {
+    window.removeInitMsg();
+  },
+
+  computeShowSpinner: function (forceShowLoading, isValidating) {
+    return forceShowLoading || isValidating;
+  },
+
+  validatingChanged: function (isValidating, isInvalid) {
+    if (!isValidating && !isInvalid) {
+      this.$.passwordInput.value = '';
+    }
+  },
+
+  isValidatingChanged: function (newVal) {
+    if (!newVal) {
+      this.async(function () { this.$.passwordInput.focus(); }.bind(this), 10);
+    }
+  },
+
+  passwordKeyDown: function (ev) {
+    // validate on enter
+    if (ev.keyCode === 13) {
+      this.validatePassword();
+      ev.preventDefault();
+    // clear error after we start typing again
+    } else if (this.isInvalid) {
+      this.isInvalid = false;
+    }
+  },
+
+  validatePassword: function () {
+    this.$.hideKeyboardOnFocus.focus();
+
+    window.validateAuth(this.$.passwordInput.value,
+                        this.$.rememberLogin.checked);
+  },
+});
+</script>
