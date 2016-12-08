@@ -1,0 +1,321 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="../../bower_components/vaadin-date-picker/vaadin-date-picker.html">
+<link rel="import" href="./ha-demo-badge.html">
+<link rel="import" href="../cards/ha-badges-card.html">
+<link rel="import" href="../cards/ha-card-chooser.html">
+<link rel="import" href="../components/entity/ha-entity-toggle.html">
+
+<script src="../../bower_components/jquery/dist/jquery.min.js"></script>
+<script src="../../bower_components/gridster/dist/jquery.gridster.min.js"></script>
+<link rel="stylesheet" href="../../bower_components/gridster/dist/jquery.gridster.min.css">
+
+<dom-module id="ha-cards">
+  <template>
+    <style is="custom-style" include="iron-flex iron-flex-factors"></style>
+    <style>
+      :host {
+        display: inline-block;
+        padding-top: 8px;
+        padding-right: 2px;
+      }
+
+      .badges {
+        font-size: 85%;
+        text-align: center;
+      }
+
+      .column {
+        max-width: auto;
+        @apply(--layout-horizontal);
+		@apply(--layout-wrap);
+        @apply(--layout-center-justified);
+      }
+
+      .zone-card {
+        margin-left: 8px;
+        margin-bottom: 8px;
+      }
+      .gridster .gs-w {
+        z-index: 0;
+      }
+      ul {
+        list-style-type: none;
+      }
+      li {
+        background-color: #FF0000;
+      }
+      .allign {
+        @apply(--layout-horizontal);
+        @apply(--layout-wrap);
+      }
+      @media (max-width: 399px) {
+        :host {
+          padding-right: 10px;
+        }
+
+        .zone-card {
+          margin-left: 8px;
+          margin-bottom: 8px;
+          @apply(--layout-flex-auto);
+        }
+        .column {
+        max-width: 350px;
+        @apply(--layout-wrap);
+		@apply(--layout-center-justified);
+        }
+      }
+
+    </style>
+    <div class='main'>
+      <template is='dom-if' if='[[cards.badges]]'>
+        <div class='badges'>
+          <template is='dom-if' if='[[cards.demo]]'>
+            <ha-demo-badge></ha-demo-badge>
+          </template>
+          <ha-badges-card states='[[cards.badges]]' hass='[[hass]]'></ha-badges-card>
+        </div>
+      </template>
+
+      <div class='gridster gs-w'>
+        <template is='dom-repeat' items='[[cards.columns]]' as='column' >
+          <div class='column'>
+            <template is='dom-repeat' items='[[column]]' as='card'>
+              <div class='zone-card '>
+                  <!--vaadin-date-picker ></vaadin-date-picker-->
+                <ha-card-chooser card-data='[[card]]' hass='[[hass]]'
+                ></ha-card-chooser>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+</dom-module>
+<script>
+(function () {
+  'use strict';
+  // mapping domain to size of the card.
+  var DOMAINS_WITH_CARD = {
+    camera: 4,
+    media_player: 3,
+    persistent_notification: 0,
+  };
+
+  var PRIORITY = {
+    configurator: -20,
+    persistent_notification: -15,
+    group: -10,
+    a: -1,
+    updater: 0,
+    sun: 1,
+    device_tracker: 2,
+    alarm_control_panel: 3,
+    sensor: 5,
+    binary_sensor: 6,
+  };
+
+  function getPriority(domain) {
+    return (domain in PRIORITY) ? PRIORITY[domain] : 30;
+  }
+
+  function entitySortBy(entity) {
+    return entity.domain === 'group' ? entity.attributes.order :
+                                       entity.entityDisplay.toLowerCase();
+  }
+  
+  Polymer({
+    is: 'ha-cards',
+
+    properties: {
+      hass: {
+        type: Object,
+      },
+      num_counts: {
+        type: Number,
+        value: 0
+      },
+      showIntroduction: {
+        type: Boolean,
+        value: false,
+      },
+
+      columns: {
+        type: Number,
+        value: 2,
+      },
+
+      states: {
+        type: Object,
+      },
+
+      panelVisible: {
+        type: Boolean,
+      },
+
+      viewVisible: {
+        type: Boolean,
+      },
+
+      cards: {
+        type: Object,
+      },
+    },
+
+    observers: [
+      'updateCards(columns, states, showIntroduction, panelVisible, viewVisible)',
+    ],
+
+    updateCards: function (columns, states, showIntroduction,
+                           panelVisible, viewVisible) {
+      /* eslint-disable no-console */
+      if (!panelVisible || !viewVisible) {
+        return;
+      }
+      this.debounce(
+        'updateCards', function () {
+          // Things might have changed since it got scheduled.
+          if (this.panelVisible && this.viewVisible) {
+            this.cards = this.computeCards(columns, states, showIntroduction);
+          }
+        }.bind(this));
+    },
+
+    computeCards: function (columns, states, showIntroduction) {
+      var hass = this.hass;
+      var byDomain = states.groupBy(function (entity) { return entity.domain; });
+      var hasGroup = {};
+
+      var cards = {
+        demo: false,
+        badges: [],
+        columns: [],
+      };
+      var entityCount = [];
+      var expandGroup;
+      var i;
+	  var j;
+      for (i = 0; i < columns; i++) {
+        cards.columns.push([]);
+        entityCount.push(0);
+      }
+
+      function filterGrouped(entities) {
+        return entities.filter(function (entity) { return !(entity.entityId in hasGroup); });
+      }
+
+      // Find column with < 5 entities, else column with lowest count
+      function getIndex(size) {
+        var minIndex = 0;
+        for (i = minIndex; i < entityCount.length; i++) {
+          if (entityCount[i] < 5) {
+            minIndex = i;
+            break;
+          }
+          if (entityCount[i] < entityCount[minIndex]) {
+            minIndex = i;
+          }
+        }
+
+        entityCount[minIndex] += size;
+
+        return minIndex;
+      }
+      if (showIntroduction) {
+        cards.columns[getIndex(5)].push({
+          hass: hass,
+          cardType: 'introduction',
+          showHideInstruction: states.size > 0 && !hass.demo,
+        });
+      }
+
+      function addEntitiesCard(name, entities, groupEntity) {
+        var owncard;
+        var other;
+        var size;
+        var curIndex;
+        if (entities.length === 0) return;
+
+        owncard = [];
+        other = [];
+
+        size = 0;
+
+        entities.forEach(function (entity) {
+          if (entity.domain in DOMAINS_WITH_CARD) {
+            owncard.push(entity);
+            size += DOMAINS_WITH_CARD[entity.domain];
+          } else {
+            other.push(entity);
+            size++;
+          }
+        });
+
+        // Add 1 to the size if we're rendering entities card
+        size += other.length > 1;
+
+        curIndex = getIndex(size);
+
+        if (other.length > 0) {
+          cards.columns[curIndex].push({
+            hass: hass,
+            cardType: 'entities',
+            states: other,
+            groupEntity: groupEntity || false,
+          });
+        }
+
+        owncard.forEach(function (entity) {
+          cards.columns[curIndex].push({
+            hass: hass,
+            cardType: entity.domain,
+            stateObj: entity,
+          });
+        });
+      }
+
+      expandGroup = this.hass.util.expandGroup;
+
+      byDomain.keySeq().sortBy(function (domain) { return getPriority(domain); })
+        .forEach(function (domain) {
+          var priority;
+
+          if (domain === 'a') {
+            cards.demo = true;
+            return;
+          }
+
+          priority = getPriority(domain);
+
+          if (priority >= 0 && priority < 10) {
+            cards.badges.push.apply(
+              cards.badges, filterGrouped(byDomain.get(domain)).sortBy(
+                entitySortBy).toArray());
+          } else if (domain === 'group') {
+            byDomain.get(domain).sortBy(entitySortBy)
+              .forEach(function (groupState) {
+                var entities = expandGroup(groupState, states);
+                entities.forEach(function (entity) { hasGroup[entity.entityId] = true; });
+                addEntitiesCard(groupState.entityId, entities.toArray(), groupState);
+              }
+            );
+          } else {
+            addEntitiesCard(
+              domain, filterGrouped(byDomain.get(domain)).sortBy(entitySortBy).toArray());
+          }
+        }
+      );
+
+      // Remove empty columns
+      cards.columns = cards.columns.filter(function (val) {
+        return val.length > 0;
+      });
+
+      return cards;
+    },
+  });
+}());
+</script>

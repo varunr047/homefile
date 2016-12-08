@@ -1,0 +1,48 @@
+<link rel='import' href='../../bower_components/polymer/polymer.html'>
+<link rel="import" href="../../bower_components/paper-material/paper-material.html">
+
+<dom-module id='ha-card'>
+  <template>
+    <style include="paper-material">
+      :host {
+        display: block;
+        background: white;
+        transition: all 0.30s ease-out;
+        text-align: center;
+      }
+      .header {
+        @apply(--paper-font-headline);
+        @apply(--paper-font-common-expensive-kerning);
+        @apply(--layout-horizontal);
+        opacity: var(--dark-primary-opacity);
+        padding: 20px 55px 5px;
+        text-transform: capitalize;
+      }
+    </style>
+
+    <template is='dom-if' if='[[header]]'>
+      <div class='header'>[[header]]</div>
+    </template>
+    <slot></slot>
+  </template>
+</dom-module>
+
+<script>
+Polymer({
+  is: 'ha-card',
+
+  properties: {
+    header: {
+      type: String,
+    },
+    /**
+     * The z-depth of the card, from 0-5.
+     */
+    elevation: {
+      type: Number,
+      value: 1,
+      reflectToAttribute: true,
+    },
+  },
+});
+</script>

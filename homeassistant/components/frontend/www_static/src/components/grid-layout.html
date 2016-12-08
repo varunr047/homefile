@@ -1,0 +1,75 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../cards/ha-badges-card.html">
+<script src="../../bower_components/jquery/dist/jquery.min.js"></script>
+<script src="../../bower_components/gridster/dist/jquery.gridster.min.js"></script>
+<link rel="stylesheet" href="../../bower_components/gridster/dist/jquery.gridster.min.css">
+
+<dom-module id="grid-layout">
+<style>
+   ul {
+    list-style-type: none;
+   }
+   li {
+    background-color: #FFFFFF;
+    text-align:center;
+   }
+  .gridster .gs-w {
+    z-index: 0;
+  }
+  paper-button {
+    background-color: rgba(3,169,244,0.7);
+    width: 70px;
+    height: 70px;
+    border-radius: 35px;
+    filter: alpha(opacity=50); /* For IE8 and earlier */
+  }
+  paper-button[state-active] {
+    background-color: rgb(255,140,0);
+    width: 70px;
+    height: 70px;
+    border-radius: 35px;
+    color: #FF0000;
+  }
+</style>
+  <template>
+    <div class="gridster">
+    <ul>
+        <li data-row="1" data-col="1" data-sizex="1" data-sizey="1">
+          <paper-button class='self-center'>test</paper-button>
+        </li>
+        <li data-row="1" data-col="2" data-sizex="1" data-sizey="1">
+        </li>
+    </ul>
+    </div>
+  </template>
+  <script>
+  Polymer({
+    is: 'grid-layout',
+
+    properties: {
+      hass: {
+        type: Object,
+      },
+
+      inDialog: {
+        type: Boolean,
+        value: false,
+      },
+
+      stateObj: {
+        type: Object,
+      },
+    },
+    attached: function() {
+    this.async(function() {
+
+      $(".gridster ul").gridster({
+        widget_margins: [10, 10],
+        widget_base_dimensions: [150, 150]
+      });
+
+    });
+   }
+  });
+  </script>
+</dom-module>
